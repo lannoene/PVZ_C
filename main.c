@@ -19,6 +19,7 @@
 #define MOUSE_OUT_OF_BOUNDS -1
 #define SUN_SIZE 50
 #define TEXT_LOAD_SIZE 100
+#define MAX_PROJ 9999
 
 /*
 * Audio channel legend:
@@ -53,11 +54,16 @@ enum imageIdList {
 	BG_GRASS = 0,
 	IMG_PEASHOOTER,
 	IMG_ZOMBIE_NORMAL,
-	IMG_SUN
+	IMG_SUN,
+	IMG_PEA
 };
 
 enum plantIdList {
-	peaShooter = 0
+	ID_PEAHOOTER = 0
+};
+
+enum projIdList {
+	PROJ_PEA = 0
 };
 
 enum musicIdList {
@@ -72,15 +78,17 @@ enum sfxIdList {
 
 struct plantStr {
 	SDL_Texture* plantImg;
-	int x, y, type;
+	int x, y, type, width, height;
 	bool isPlanted;
+	int row, column;
+	int fireRate, fireTimer;
 } plants[MAX_PLANTS];
 
 struct zombieStr {
 	SDL_Texture* plantImg;
 	bool isSpawned;
 	float x;
-	int y, type;
+	int y, type, row, column, height, width, health;
 } zombies[MAX_ZOMBIES];
 
 struct sunStr {
@@ -89,13 +97,19 @@ struct sunStr {
 	int width, height;
 } sun[MAX_SUN];
 
+struct projStr {
+	float x, y;
+	bool isSpawned;
+	int type, height, width, row;
+} proj[MAX_PROJ];
+
 time_t t;
 int randomNumber(int range) {
 	int rng = rand() % range;
 	return rng;
 }
 
-void text(char string[], float textSize, int x, int y) {
+void text(char string[], int x, int y, float textSize) {
 	textSurf = TTF_RenderText_Solid(font, string, (SDL_Color){0,0,0});
 	
 	float textMultiple = textSurf->h/textSize;
@@ -111,32 +125,82 @@ void text(char string[], float textSize, int x, int y) {
 	SDL_DestroyTexture(textTexture);
 }
 
+bool checkBounds(float inputChecking_x, float inputChecking_y, float inputCheckAgainst_x, float inputCheckAgainst_y, float size) {
+	if (inputChecking_x > inputCheckAgainst_x && inputChecking_x < inputCheckAgainst_x + size && inputChecking_y > inputCheckAgainst_y && inputChecking_y < inputCheckAgainst_y + size) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 void plantSeed(int row, int column, int type) {
-	plants[plantCount].x = column * 60 + 200;
-	plants[plantCount].y = row * 82 + 80;
-	plants[plantCount].type = type;
-	plants[plantCount].isPlanted = true;
-	
-	++plantCount;
+	for (int i = 0; i < MAX_PLANTS; ++i) {
+		if (plants[i].isPlanted == false) {
+			plants[i].x = column * 60 + 200;
+			plants[i].y = row * 82 + 80;
+			plants[i].type = type;
+			plants[i].isPlanted = true;
+			plants[i].row = row;
+			plants[i].column = column;
+			plants[i].fireTimer = 0;
+			
+			switch (type) {
+				case ID_PEAHOOTER:
+					plants[i].fireRate = 200;
+					plants[i].width = 50;
+					plants[i].height = 50;
+				break;
+			}
+			
+			break;
+		}
+	}
 }
 
 void spawnZombie(int row, int type) {
-	zombies[zombieCount].x = 800;
-	zombies[zombieCount].y = row * 82 + 80;
-	zombies[zombieCount].type = type;
-	zombies[zombieCount].isSpawned = true;
-	
-	++zombieCount;
+	for (int i = 0; i < MAX_ZOMBIES; ++i) {
+		if (zombies[i].isSpawned == false) {
+			zombies[i].x = 800;
+			zombies[i].y = row * 82 + 80;
+			zombies[i].type = type;
+			zombies[i].isSpawned = true;
+			zombies[i].row = row;
+			zombies[i].width = 50;
+			zombies[i].height = 50;
+			zombies[i].health = 100;
+			
+			break;
+		}
+	}
 }
 
 void spawnSun() {
-	sun[sunSpawnId].x = randomNumber(750);
-	sun[sunSpawnId].y = -50;
-	sun[sunSpawnId].width = 50;
-	sun[sunSpawnId].height = 50;
-	sun[sunSpawnId].isSpawned = true;
-	
-	++sunSpawnId;
+	for (int i = 0; i < MAX_SUN; ++i) {
+		if (sun[i].isSpawned == false) {
+			sun[i].x = randomNumber(750);
+			sun[i].y = -50;
+			sun[i].width = 50;
+			sun[i].height = 50;
+			sun[i].isSpawned = true;
+			
+			break;
+		}
+	}
+}
+
+void spawnProjectile(int x, int y, int row, int type) {
+	for (int i = 0; i < MAX_PROJ; ++i) {
+		if (proj[i].isSpawned == false) {
+			proj[i].x = x;
+			proj[i].y = y;
+			proj[i].width = 20;
+			proj[i].height = 20;
+			proj[i].isSpawned = true;
+			proj[i].row = row;
+			
+			break;
+		}
+	}
 }
 
 void initSprites() {
@@ -156,6 +220,10 @@ void initSprites() {
 	image_sur = IMG_Load("romfs/sun.png");
 	image[IMG_SUN] = SDL_CreateTextureFromSurface(rend, image_sur);
 	SDL_FreeSurface(image_sur);
+	
+	image_sur = IMG_Load("romfs/pea_projectile.png");
+	image[IMG_PEA] = SDL_CreateTextureFromSurface(rend, image_sur);
+	SDL_FreeSurface(image_sur);
 }
 
 void initEntities() {
@@ -167,6 +235,9 @@ void initEntities() {
 	}
 	for (int i = 0; i < MAX_SUN; ++i) {
 		sun[i].isSpawned = false;
+	}
+	for (int i = 0; i < MAX_PROJ; ++i) {
+		proj[i].isSpawned = false;
 	}
 }
 
@@ -187,18 +258,21 @@ void audioInit() {
 void updateEntities() {
 	//update zombies
 	for (int i = 0; i < MAX_ZOMBIES; ++i) {
-		if (zombies[i].isSpawned != false) {
+		if (zombies[i].isSpawned) {
 			zombies[i].x -= 0.2;
+			if (zombies[i].health <= 0) {
+				zombies[i].isSpawned = false;
+			}
 		} else {
 			continue;
 		}
 	}
 	
 	//update sun
-	for (int i = 0; i < MAX_ZOMBIES; ++i) {
-		if (sun[i].isSpawned != false) {
+	for (int i = 0; i < MAX_SUN; ++i) {
+		if (sun[i].isSpawned) {
 			sun[i].y += 0.5;
-			if (coord_click_x > sun[i].x && coord_click_x < sun[i].x + SUN_SIZE && coord_click_y > sun[i].y && coord_click_y < sun[i].y + SUN_SIZE) {
+			if (checkBounds(coord_click_x, coord_click_y, sun[i].x, sun[i].y, SUN_SIZE)) {
 				sun[i].isSpawned = false;
 				sunCount += 25;
 				Mix_PlayChannel(1, sfx[SFX_SUN_COLLECT], 0);
@@ -207,13 +281,54 @@ void updateEntities() {
 			continue;
 		}
 	}
+	
+	//update plants
+	for (int i = 0; i < MAX_PLANTS; ++i) {
+		if (plants[i].isPlanted) {
+			for (int j = 0; j < MAX_ZOMBIES; ++j) {
+				if (zombies[j].isSpawned == true && zombies[j].row == plants[i].row) {
+					if (plants[i].fireTimer >= plants[i].fireRate) {
+						spawnProjectile(plants[i].x, plants[i].y, plants[i].row, PROJ_PEA);
+					}
+				} else {
+					continue;
+				}
+			}
+			if (plants[i].fireTimer >= plants[i].fireRate) {
+				plants[i].fireTimer = 0;
+			}
+			
+			plants[i].fireTimer += 1;
+		} else {
+			continue;
+		}
+	}
+	
+	//update projectiles
+	for (int i = 0; i < MAX_PROJ; ++i) {
+		if (proj[i].isSpawned) {
+			proj[i].x += 5;
+			for (int j = 0; j < MAX_ZOMBIES; ++j) {
+				if (zombies[j].row == proj[i].row && proj[i].x > zombies[j].x && proj[i].x < zombies[j].x + zombies[j].width && zombies[j].isSpawned == true) {
+					printf("hit");
+					proj[i].isSpawned = false;
+					zombies[j].health -= 10;
+				}
+			}
+			
+			if (proj[i].x > 800) {
+				proj[i].isSpawned = false;
+				printf("stray pea removed");
+			}
+		}
+	}
 }
 
 void renderEntities() {
 	//render plants
 	for (int i = 0; i < MAX_PLANTS; ++i) {
 		if (plants[i].isPlanted != false) {
-			SDL_RenderCopy(rend, image[IMG_PEASHOOTER], NULL, &(SDL_Rect){plants[i].x, plants[i].y, 50, 50});
+			SDL_RenderCopy(rend, image[IMG_PEASHOOTER], NULL, &(SDL_Rect){plants[i].x, plants[i].y, plants[i].width, plants[i].height});
 		} else {
 			continue;
 		}
@@ -222,7 +337,7 @@ void renderEntities() {
 	//render zombies
 	for (int i = 0; i < MAX_ZOMBIES; ++i) {
 		if (zombies[i].isSpawned != false) {
-			SDL_RenderCopy(rend, image[IMG_ZOMBIE_NORMAL], NULL, &(SDL_Rect){zombies[i].x, zombies[i].y, 50, 50});
+			SDL_RenderCopy(rend, image[IMG_ZOMBIE_NORMAL], NULL, &(SDL_Rect){zombies[i].x, zombies[i].y, zombies[i].width, zombies[i].height});
 		} else {
 			continue;
 		}
@@ -231,7 +346,16 @@ void renderEntities() {
 	//render sun
 	for (int i = 0; i < MAX_SUN; ++i) {
 		if (sun[i].isSpawned != false) {
-			SDL_RenderCopy(rend, image[IMG_SUN], NULL, &(SDL_Rect){sun[i].x, sun[i].y, 50, 50});
+			SDL_RenderCopy(rend, image[IMG_SUN], NULL, &(SDL_Rect){sun[i].x, sun[i].y, SUN_SIZE, SUN_SIZE});
+		} else {
+			continue;
+		}
+	}
+	
+	//render projectiles
+	for (int i = 0; i < MAX_PROJ; ++i) {
+		if (proj[i].isSpawned != false) {
+			SDL_RenderCopy(rend, image[IMG_PEA], NULL, &(SDL_Rect){proj[i].x, proj[i].y, proj[i].width, proj[i].height});
 		} else {
 			continue;
 		}
@@ -258,7 +382,7 @@ int main(int argc, char *argv[]) {
 	
 	bool run = true;
 	while (run) {
-		while (SDL_GetTicks() % 20 != 0) {
+		while ((int)(SDL_GetTicks()) % 20 != 0) {
 			//hold
 		}
 		
@@ -296,7 +420,7 @@ int main(int argc, char *argv[]) {
 						printf("row: %f column: %f %d\n", row_click, column_click, (coord_click_x - 200)/60);
 						if (row_click >= 0 && row_click < 5 && column_click >= 0 && column_click < 9) {
 							Mix_PlayChannel(1, sfx[SFX_SEED_PLANT], 0);
-							plantSeed((int)row_click, (int)column_click, peaShooter);
+							plantSeed((int)row_click, (int)column_click, ID_PEAHOOTER);
 						}
 					}
 				break;
@@ -322,9 +446,9 @@ int main(int argc, char *argv[]) {
 		char sunCounter[40];
 		snprintf(sunCounter, sizeof(sunCounter), "Sun: %d", sunCount);
 		
-		text(sunCounter, 50, 0, 0);
+		text(sunCounter, 0, 0, 50);
 		
-		if (gameFrame % 100 == 0) {
+		if (gameFrame % 500 == 0) {
 			spawnZombie(randomNumber(5), 0);
 			spawnSun();
 		}
